@@ -1,4 +1,4 @@
-FROM php:8.0.24-fpm-buster
+FROM php:8.0.24-fpm-buster as laravel_app
 
 # Set working directory
 WORKDIR /var/www
@@ -30,8 +30,14 @@ RUN docker-php-ext-install gd
 
 # Install composer
 RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+ARG PROJECT_NAME
+
 RUN composer create-project laravel/laravel ${PROJECT_NAME}
-RUN mv ./${PROJECT_NAME}/* .
+RUN mv ./${PROJECT_NAME}/* . 
+
+FROM scratch AS export-stage
+COPY --from=laravel_app . .
 
 # Add user for laravel application
 RUN groupadd -g 1000 www
@@ -40,12 +46,15 @@ RUN useradd -u 1000 -ms /bin/bash -g www www
 # Copy existing application directory permissions
 COPY --chown=www:www . /var/www
 
+RUN chown www:www /var/www/vendor/composer/*
+
+# Change current user to www
+USER www
+
 RUN composer update
 RUN composer install
 RUN composer dump-autoload
 
-# Change current user to www
-USER www
 
 # Expose port 9000 and start php-fpm server
 EXPOSE 9000
